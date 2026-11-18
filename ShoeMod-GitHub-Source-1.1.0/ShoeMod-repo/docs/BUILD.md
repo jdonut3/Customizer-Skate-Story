@@ -1,32 +1,59 @@
-# Build information
+# Build instructions
 
-## Current state
+The release files are built from the files in `source/` with no other code. The game is not in this repository:
+you need your own copy of Skate Story (Steam, Windows) for the reference DLLs, which are not redistributed here.
 
-The supplied source archive contains these C# files:
+## What the release contains
 
-- `source/ShoeMod.cs`
-- `source/ShoeCore.cs`
-- `source/MoveTools.cs`
-- `source/FxTools.cs`
-- `source/ScreenTools.cs`
-- `source/CameraTools.cs`
-- `source/Installer.cs`
+| File | Built from | How |
+|---|---|---|
+| `ShoeMod.dll` | `source/ShoeMod.cs`, `ShoeCore.cs`, `ScreenTools.cs`, `CameraTools.cs`, `MoveTools.cs`, `FxTools.cs` | C# compiler, against the game's own DLLs |
+| `ShoeModInstaller.exe` | `source/Installer.cs` | C# compiler, .NET Framework 4 |
+| `patches/*.smp` | `tools/mkpatch.py` | Binary differences between original and edited game asset files (see below) |
 
-It does **not** contain a `.sln`, `.csproj`, package manifest, compiler script, or the game/Unity reference assemblies used to compile the mod DLL. The archive alone therefore does not establish a reproducible build procedure.
+No other files, no downloads at run time, and no network access. The mod uses no mod loader: the installer adds it
+to the game's own start-up list (`ScriptingAssemblies.json` and `RuntimeInitializeOnLoads.json`).
 
-## What is needed for a reproducible build
+## Requirements
 
-1. Identify the exact compiler and target .NET/Mono framework used for the shipped DLL and installer.
-2. Record the exact Unity and game-managed reference assemblies required by the mod source, including the post-processing assembly used by `CameraTools.cs`.
-3. Add project files or build scripts that reference those assemblies without copying proprietary game binaries into this public repository.
-4. Record compiler versions, build configuration, and commands.
-5. Build the DLL and installer from a clean checkout and compare the resulting outputs with the release artifacts.
-6. Confirm that the source version strings match the release version before tagging a release.
+- Skate Story installed (game version of November 2026). The DLLs come from `SkateStory_Data\Managed`:
+  mscorlib, System, System.Core, UnityEngine.CoreModule, UnityEngine.IMGUIModule, UnityEngine.TextRenderingModule,
+  UnityEngine.InputLegacyModule, UnityEngine.UIModule, UnityEngine.UI, Unity.Postprocessing.Runtime,
+  UnityEngine.PhysicsModule, Unity.Addressables, Unity.ResourceManager, UnityEngine.ParticleSystemModule, Assembly-CSharp.
+- A C# compiler. One of:
+  - Windows: `csc.exe` of .NET Framework 4, which comes with Windows
+    (`%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`).
+  - Linux or macOS: Mono 6.8 (`mcs`). The release was built with Mono 6.8.0.105 `mcs`.
 
-## Important release audit note
+## Build
 
-The release archive labels the installer as 1.1.0, but `source/ShoeMod.cs` contains `version 1.0.0` in its header and loader log message. Verify whether the DLL was built from these exact source files. Do not describe this repository as a verified, exact source match until that is resolved.
+Windows:
 
-## Installer behavior
+    build.bat "C:\Program Files (x86)\Steam\steamapps\common\Skate Story"
 
-The release README describes an installer that locates the Steam game installation, verifies expected game files, applies the included patches, backs up originals, and can restore the originals. The installer binary and patch files are intentionally excluded from this source repository. The installer source is included for inspection.
+Linux or macOS (with a copy of the game folder):
+
+    ./build.sh "/path/to/Skate Story"
+
+The output goes to `build/`.
+
+## Check the result against the release
+
+With Mono 6.8 `mcs`, the build is byte for byte the same as the release files:
+
+    ShoeMod.dll           SHA-256  818cffc4e4a0d85ac7bf31a3a0a1ff9c69862b0543db9dcb906e812455deb45e
+    ShoeModInstaller.exe  SHA-256  c2c31d5f293557192031dccd111e6e37a4416c64c26785a40e65069dbda729bf
+
+Windows: `certutil -hashfile build\ShoeMod.dll SHA256`.  Linux: `sha256sum build/*`.
+The Windows `csc.exe` makes a different file (other compiler), with the same code.
+
+Note: the comment at the top of `ShoeMod.cs` and its start-up log line still say 1.0.0. The released 1.1.0 DLL is
+built from these exact files (the checksums above prove it). The text is updated in the next version.
+
+## The patch files
+
+The mod changes three asset bundles of the game (the shoe and deck models get more triangles, so that they can be painted).
+The ZIP holds no game files. Each `.smp` file holds only the changed bytes, plus "copy this range from your own file" steps.
+The installer applies a patch only when the SHA-256 of the user's file is the original one, checks the SHA-256 of the result,
+and keeps a backup of the original. The format and the code that makes and applies the patches are in `tools/mkpatch.py`
+and `source/Installer.cs` (class `Patch`).
