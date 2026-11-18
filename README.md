@@ -43,11 +43,11 @@ source/
 
 ## Building
 
-See [`docs/BUILD.md`](docs/BUILD.md). The source snapshot supplied with release 1.1.0 does not include a Visual Studio solution, project file, dependency assemblies, or a fully specified build script. Do not assume it is reproducibly buildable from this repository alone until those are added and tested.
+See [`docs/BUILD.md`](docs/BUILD.md). Run `build.bat` (Windows) or `build.sh` (Linux or macOS) with your own Skate Story folder, which supplies the reference DLLs. A build with Mono 6.8 `mcs` is byte for byte the same as the released `ShoeMod.dll` and `ShoeModInstaller.exe`; the SHA-256 checksums are in the build guide.
 
 ## Version notes
 
-See [`CHANGELOG.md`](CHANGELOG.md). The source snapshot currently contains version strings identifying the mod loader as **1.0.0**, while the installer identifies itself as **1.1.0**. This discrepancy is recorded rather than silently changed; verify the source against the exact DLL shipped in the 1.1.0 release before treating this repository as an exact source match.
+See [`CHANGELOG.md`](CHANGELOG.md). The comment at the top of `ShoeMod.cs` and its start-up log line still say 1.0.0. The released 1.1.0 DLL is built from these exact files (see the checksums in the build guide). The text will be updated in the next version.
 
 ## Distribution and permissions
 
