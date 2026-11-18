@@ -1,6 +1,6 @@
 # ShoeMod — Skate Story In-Game Editor
 
-**Source repository for ShoeMod 1.1.0**
+**Source repository for ShoeMod.** The `main` branch holds version 1.2.0 (in development). The exact source of the released 1.1.0 (the Nexus Mods download) is on the [`release-1.1.0`](../../tree/release-1.1.0) branch.
 
 ShoeMod is a fan-made in-game editor for the Windows/Steam version of *Skate Story*. Press **F6** in-game to open or close the editor.
 
@@ -11,9 +11,11 @@ ShoeMod is a fan-made in-game editor for the Windows/Steam version of *Skate Sto
 - **Shoes:** customize shoe-part colors and paint designs onto the shoe model.
 - **Board:** customize deck colors and paint designs.
 - **Screen:** move or hide selected HUD elements and skip selected startup screens.
-- **Camera:** adjust camera position and view settings; configure visual effects.
-- **Movement:** adjust push power, jump height, grind behavior, game speed, and selected health/bail behavior.
-- **Effects:** configure board effects, body particles/material appearance, and nearby object visibility.
+- **Camera:** offsets on the game camera, rig shots (front, side, chase, fisheye, top down, drone), fixed camera spots per level, and visual effects.
+- **Movement:** push power, power slide boost, jump height, air spins past 360, front and back flips (drawn only, with timing sliders), grind snap and hold, game speed, and health/bail options.
+- **Effects:** board effects, body particles, body material and layers, and a finder that hides objects near the board.
+- **Levels (1.2.0):** free skate in any level, with story objectives and level exits turned off. The real save is copied first and put back afterwards.
+- **Screen (1.2.0):** toggles for subtitles and boss headers (boss health bars and fight timers).
 
 The editor's detailed controls and known limitations are described in the release README distributed with the Nexus Mods download.
 
@@ -38,6 +40,8 @@ source/
   FxTools.cs       Board/body effects controls
   ScreenTools.cs   HUD and startup-screen controls
   CameraTools.cs   Camera and post-processing controls
+  WarpTools.cs     Levels tab: free skate in any level (1.2.0)
+  SubTools.cs      Subtitle and boss header toggles (1.2.0)
   Installer.cs     Windows installer and patch/restore logic
 ```
 
@@ -47,7 +51,7 @@ See [`docs/BUILD.md`](docs/BUILD.md). Run `build.bat` (Windows) or `build.sh` (L
 
 ## Version notes
 
-See [`CHANGELOG.md`](CHANGELOG.md). The comment at the top of `ShoeMod.cs` and its start-up log line still say 1.0.0. The released 1.1.0 DLL is built from these exact files (see the checksums in the build guide). The text will be updated in the next version.
+See [`CHANGELOG.md`](CHANGELOG.md). The released 1.1.0 is built from the `release-1.1.0` branch (see the checksums in the build guide). `main` is 1.2.0, in development, and is not released yet.
 
 ## Distribution and permissions
 

@@ -9,6 +9,12 @@
 //  Jump height: when the game makes a jump (an ollie), the extra part of the jump force is added (or taken away).
 //  Health: the fragile mode (one hit kills, after the end of the game) can be turned off without a change to the save,
 //  damage can be turned off, and the game's own god mode (no bails) can be turned on.
+//  Air spins: the game slows a spin down from 2x to a quarter in the first second of a jump. "Keep spinning" adds the
+//  missing turn to the whole skater (as the game's own spin does) for the full jump, so you can spin past 360. When you
+//  let go of the stick, the turn goes on to the nearest half turn, so you land regular or switch.
+//  Flips: in the air, hold two buttons together (set in the menu). Only the drawn skater and board turn, around the middle
+//  of the body, at the full frame rate; the game's jump, speed, landing and camera do not change. A flip starts fast and
+//  always ends before the landing (it speeds up if the ground comes sooner).
 // The game speed uses the game's own speed value (TimeMan.debugGameSpeed), so sounds slow down with it.
 using System;
 using System.Collections.Generic;
@@ -35,6 +41,23 @@ public class MoveTools
     float noSnapUntil; bool wasGrinding; public string snapInfo = "";
 
     bool jumpOn; float jumpMul = 1.5f;
+    bool spinOn; float spinMul = 1f;
+    bool flipOn; float flipSpeed = 720f; float flipRate = 720f; bool flipStick = false;
+    float flipTime, flipDur = 0.65f, flipFeel = 0.65f;     // flipFeel: the flip time on a jump with enough air (s)
+    // flip feel (sliders)
+    const float DefDelay = 0f, DefSharp = 2.6f, DefSoft = 0.25f, DefPivot = 0.45f, DefMargin = 0.04f, DefLift = 2.5f;
+    float flipDelay = DefDelay;        // seconds after leaving the ground before the flip starts
+    float flipSharp = DefSharp;        // how hard the flip starts (1 = even, 4 = a very fast start)
+    float flipSoft = DefSoft;          // 0 = the end stays fast, 1 = a soft slow end
+    float flipMargin = DefMargin;      // the flip ends this many seconds before the board comes down
+    float flipLift = DefLift;          // the most extra up speed for a jump with almost no air (m/s)
+    int flipTurns = 1;                 // 1 = single flip, 2 = double flip
+    float pendingDir;                  // a flip that waits for the start delay
+    // flip buttons: two buttons held together. Defaults: both stick clicks = front flip, both shoulder buttons = back flip.
+    KeyCode[] frontKeys = { KeyCode.JoystickButton8, KeyCode.JoystickButton9 };
+    KeyCode[] backKeys = { KeyCode.JoystickButton4, KeyCode.JoystickButton5 };
+    int binding;                 // 0 = no, 1 = waiting for the front flip buttons, 2 = for the back flip buttons
+    float flipDone, flipDir; bool flipping, flipUsed;
     Vector3 lastPop; bool popSeen;
     bool noFragile, noDamage, noBails;
     int savedGod = -1; bool damageTouched;
@@ -42,6 +65,7 @@ public class MoveTools
     static FieldInfo flagSetField;
 
     SkatePlayer sp; float nextFind;
+    Vector2 scroll;
     float pushWindow;                              // seconds after a push in which speed gains count as push speed
     Vector3 lastVel; bool haveLast;
     float curScale = 1f; bool speedTouched;
@@ -49,6 +73,7 @@ public class MoveTools
     // ---------- settings file ----------
     static string F(float v) { return v.ToString("0.###", CultureInfo.InvariantCulture); }
     static float P(string s, float d) { float v; return float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v) ? v : d; }
+    static KeyCode K(string s) { int v; return int.TryParse(s, out v) ? (KeyCode)v : KeyCode.None; }
     public void Load(string line)
     {
         line = line.Trim();
@@ -59,6 +84,15 @@ public class MoveTools
         slowSpeed = P(f[4], 0.5f); trickSlowOn = f[5] == "1"; trickSlowSpeed = P(f[6], 0.5f);
         if (f.Length > 7) slideWhen = (int)P(f[7], 1); else slideMul = 1f;
         if (f.Length > 8) slideKeep = f[8] == "1";
+        if (f.Length > 22) { spinOn = f[18] == "1"; spinMul = Mathf.Clamp(P(f[19], 1f), 0.25f, 3f); flipOn = f[20] == "1"; flipStick = f[22] == "1"; }
+        if (f.Length > 27) { flipFeel = Mathf.Clamp(P(f[23], 0.65f), 0.4f, 1f); frontKeys = new[] { K(f[24]), K(f[25]) }; backKeys = new[] { K(f[26]), K(f[27]) }; }
+        if (f.Length > 34)
+        {
+            flipDelay = Mathf.Clamp(P(f[28], DefDelay), 0f, 0.4f); flipSharp = Mathf.Clamp(P(f[29], DefSharp), 1f, 4f); flipSoft = Mathf.Clamp01(P(f[30], DefSoft));
+            FlipPivot = Mathf.Clamp(P(f[31], DefPivot), 0f, 1.2f); flipMargin = Mathf.Clamp(P(f[32], DefMargin), 0f, 0.25f);
+            flipLift = Mathf.Clamp(P(f[33], DefLift), 0f, 6f); flipTurns = Mathf.Clamp((int)P(f[34], 1), 1, 2);
+        }
+        else if (f.Length > 22) flipStick = false;     // an older line: the stick for flips is off now
         if (f.Length > 17) { jumpOn = f[13] == "1"; jumpMul = Mathf.Clamp(P(f[14], 1.5f), 0.5f, 4f); noFragile = f[15] == "1"; noDamage = f[16] == "1"; noBails = f[17] == "1"; }
         if (f.Length > 12) { snapOn = f[9] == "1"; snapRadius = Mathf.Clamp(P(f[10], 1f), 0.25f, 2f); stickyOn = f[11] == "1"; minGrindSpeed = P(f[12], 3f); }     // an older line: its slide value had a different meaning
         // the full-game slow motion is not saved: the game always starts at normal speed
@@ -68,7 +102,11 @@ public class MoveTools
         sb.Append("move=").Append(pushOn ? "1" : "0").Append(',').Append(F(pushMul)).Append(',').Append(slideOn ? "1" : "0").Append(',').Append(F(slideMul))
           .Append(',').Append(F(slowSpeed)).Append(',').Append(trickSlowOn ? "1" : "0").Append(',').Append(F(trickSlowSpeed)).Append(',').Append(slideWhen).Append(',').Append(slideKeep ? "1" : "0")
           .Append(',').Append(snapOn ? "1" : "0").Append(',').Append(F(snapRadius)).Append(',').Append(stickyOn ? "1" : "0").Append(',').Append(F(minGrindSpeed))
-          .Append(',').Append(jumpOn ? "1" : "0").Append(',').Append(F(jumpMul)).Append(',').Append(noFragile ? "1" : "0").Append(',').Append(noDamage ? "1" : "0").Append(',').Append(noBails ? "1" : "0").Append('\n');
+          .Append(',').Append(jumpOn ? "1" : "0").Append(',').Append(F(jumpMul)).Append(',').Append(noFragile ? "1" : "0").Append(',').Append(noDamage ? "1" : "0").Append(',').Append(noBails ? "1" : "0")
+          .Append(',').Append(spinOn ? "1" : "0").Append(',').Append(F(spinMul)).Append(',').Append(flipOn ? "1" : "0").Append(',').Append(F(flipSpeed)).Append(',').Append(flipStick ? "1" : "0")
+          .Append(',').Append(F(flipFeel)).Append(',').Append((int)frontKeys[0]).Append(',').Append((int)frontKeys[1]).Append(',').Append((int)backKeys[0]).Append(',').Append((int)backKeys[1])
+          .Append(',').Append(F(flipDelay)).Append(',').Append(F(flipSharp)).Append(',').Append(F(flipSoft)).Append(',').Append(F(FlipPivot))
+          .Append(',').Append(F(flipMargin)).Append(',').Append(F(flipLift)).Append(',').Append(flipTurns).Append('\n');
     }
 
     // ---------- each frame ----------
@@ -87,6 +125,9 @@ public class MoveTools
 
     public void Update(float now)
     {
+        inst = this; HookCameras();
+        AfterDraw();
+        try { LogFrame(); } catch (Exception e) { status = "Test log error: " + e.Message; }
         try
         {
             FindPlayer(now);
@@ -178,8 +219,417 @@ public class MoveTools
     // Called each physics step.
     public void Physics()
     {
-        try { Sticky(); Jump(); } catch (Exception) { }
+        try { Sticky(); Jump(); AirTricks(); ProtectTick(); } catch (Exception) { }
     }
+
+    // ---------- air spins and flips ----------
+    // What you see in the air is the skater model, turned by the game's stance rotation (x = forward and back, y = spin).
+    // The physics body is not turned: the game turns it back to the direction of travel, and the camera follows it.
+    float spinAdded; bool wasAir;
+    // ---------- test log for spins: the angle of each part, each drawn frame in the air ----------
+    public bool spinLog; System.Text.StringBuilder logBuf = new System.Text.StringBuilder(); int logLines; bool logAir; float lastExtra;
+    static float Yaw(Transform t) { if (t == null) return -999f; Vector3 f = t.forward; return Mathf.Atan2(f.x, f.z) * 57.29578f; }
+    public void LogFrame()
+    {
+        if (!spinLog || sp == null) return;
+        bool air = false; try { air = ThePlayer.IS_AIRBORNE; } catch (Exception) { }
+        if (!air)
+        {
+            if (logAir)
+            {   // the jump ended: write it
+                logBuf.Append("LAND  dTurn=").Append(sp.skState.degreesTurnedInAir.ToString("0")).Append('\n');
+                try { string lp = System.IO.Path.Combine(System.IO.Path.Combine(Application.persistentDataPath, "ShoeMod"), "spinlog.txt"); string old = System.IO.File.Exists(lp) ? System.IO.File.ReadAllText(lp) : ""; System.IO.File.WriteAllText(lp, old + logBuf.ToString()); } catch (Exception) { }
+                logBuf.Length = 0;
+            }
+            logAir = false; return;
+        }
+        if (!logAir) { logAir = true; logBuf.Append("JUMP ").Append(DateTime.Now.ToString("HH:mm:ss")).Append('\n'); }
+        if (++logLines > 20000) return;
+        ThePlayer p = ThePlayer.instance;
+        Vector2 mv = Vector2.zero; try { mv = sp.input.move; } catch (Exception) { }
+        SkatePlayer.SkState st = sp.skState;
+        logBuf.Append("t=").Append(st.airborneTimer.ToString("0.00"))
+          .Append(" mvx=").Append(mv.x.ToString("0.0"))
+          .Append(" body=").Append(Yaw(sp.transform).ToString("0"))
+          .Append(" board=").Append(Yaw(sp.board != null ? sp.board.transform : null).ToString("0"))
+          .Append(" anim=").Append(Yaw(sp.skateAnimator != null ? sp.skateAnimator.transform : null).ToString("0"))
+          .Append(" head=").Append(Yaw(p != null && p.finalSkaterMesh != null ? p.finalSkaterMesh.finalHead : null).ToString("0"))
+          .Append(" pboard=").Append(Yaw(p != null && p.physicsBoard != null ? p.physicsBoard.transform : null).ToString("0"))
+          .Append(" stT=").Append(sp.stance.StanceRotationTarget.y.ToString("0"))
+          .Append(" stNow=").Append(sp.skateAnimatorStanceRotation.y.ToString("0"))
+          .Append(" dTurn=").Append(st.degreesTurnedInAir.ToString("0"))
+          .Append(" car=").Append(st.canAirRotate.ToString("0.0")).Append(" dbl=").Append(st.doubledAirRot)
+          .Append(" extra=").Append(lastExtra.ToString("0.0"))
+          .Append(" vy=").Append(sp.skPhysics.velocity.y.ToString("0.0")).Append(" y=").Append(sp.transform.position.y.ToString("0.00"))
+          .Append(" flip=").Append(flipping ? FlipAngle().ToString("0") : "-")
+          .Append(" up=").Append(sp.transform.up.y.ToString("0.00"))
+          .Append(" gap=").Append(p != null && p.finalSkaterMesh != null && p.finalSkaterMesh.finalHead != null && sp.board != null
+                ? Vector3.Distance(p.finalSkaterMesh.finalHead.position, sp.board.transform.position).ToString("0.00") : "-").Append('\n');
+        if (flipLog.Length > 0) { logBuf.Append(flipLog).Append('\n'); flipLog = ""; }
+    }
+    static System.Reflection.FieldInfo stanceNow;
+    void AirTricks()
+    {
+        if (sp == null || sp.skState == null || sp.stance == null) return;
+        SkatePlayer.SkState st = sp.skState;
+        bool air = false;
+        try { air = ThePlayer.IS_AIRBORNE; } catch (Exception) { }
+        bool grind = sp.skimGrindState != null && sp.skimGrindState.inGrind;
+        float dt = TimeMan.skateDeltaTime;
+        if (!air || grind)
+        {
+            if (wasAir) Landed();
+            wasAir = false; flipUsed = false;
+            return;
+        }
+        wasAir = true;
+        if (dt <= 0f) return;
+        Vector2 mv = Vector2.zero;
+        try { mv = sp.input.move; } catch (Exception) { }
+        Vector3 tgt = sp.stance.StanceRotationTarget;
+
+        // keep spinning: the game's speed falls from 2x to 0.25x in the first second. The extra turn goes on the whole
+        // skater (body and board together, as the game's own spin does), so the legs do not twist.
+        if (spinOn && st.isAirborneMode)
+        {
+            if (Mathf.Abs(mv.x) > 0.3f)
+            {
+                float rate = Mathf.Lerp(120f, 200f, Mathf.Abs(st.canAirRotate));
+                if (st.doubledAirRot > 0) rate *= 1.8f;
+                bool gameSpins = st.canAirRotate != 0f || st.doubledAirRot > 0;
+                float gameMul = gameSpins ? Mathf.Lerp(2f, 0.25f, st.airborneTimer) : 0f;
+                float extra = mv.x * dt * rate * Mathf.Max(0f, 2f * spinMul - gameMul);
+                if (!gameSpins) extra *= 0.5f;                 // no flick at the start: a slower spin
+                lastExtra = extra;
+                if (extra != 0f)
+                {
+                    TurnLocalYaw(extra);
+                    spinAdded += extra;
+                    st.degreesTurnedInAir += extra;           // so that the game counts the spin (540, 720...)
+                    st.degreesTurnedInAir_abs += Mathf.Abs(extra);
+                }
+            }
+            if (spinAdded != 0f && (Mathf.Abs(mv.x) <= 0.3f || GroundSoon())) SettleSpin(dt, GroundSoon());
+        }
+
+        // flips: only what is drawn turns (see FlipVisual). Here: start a flip, and make it end before the landing.
+        if (flipOn)
+        {
+            if (!flipping && !flipUsed && pendingDir == 0f && st.airborneTimer > 0f)
+            {
+                float want = 0f;
+                if (flipStick && Mathf.Abs(mv.y) > 0.75f && Mathf.Abs(mv.y) > Mathf.Abs(mv.x)) want = mv.y > 0f ? 1f : -1f;
+                if (Held(frontKeys)) want = 1f;
+                if (Held(backKeys)) want = -1f;
+                if (want != 0f) pendingDir = want;          // it starts after the start delay
+            }
+            if (!flipping && pendingDir != 0f && st.airborneTimer >= flipDelay) { StartFlip(pendingDir); pendingDir = 0f; }
+            if (flipping)
+            {   // the flip must end before the board comes down: if the ground is nearer than planned, end earlier
+                float left = TimeToGround();
+                float endBy = Time.time + Mathf.Max(0.05f, left - flipMargin);
+                if (endBy < flipEnd) flipEnd = Mathf.Max(Time.time + 0.05f, endBy);
+            }
+        }
+        // the trick count: the real turn of the skater in this jump (not the turns that the game takes back)
+        if (spinOn && !flipping)
+        {
+            float y = YawNow();
+            if (haveYaw) measured += Mathf.DeltaAngle(lastYaw, y);
+            lastYaw = y; haveYaw = true;
+            st.degreesTurnedInAir = measured;
+            st.degreesTurnedInAir_abs = Mathf.Abs(measured);
+        }
+        sp.stance.StanceRotationTarget = tgt;
+    }
+    float measured, lastYaw; bool haveYaw;
+    float YawNow() { Vector3 f = sp.transform.forward; f.y = 0f; return f.sqrMagnitude < 0.0001f ? lastYaw : Mathf.Atan2(f.x, f.z) * 57.29578f; }
+
+    Vector3 flipAxis; int savedGodFlip = -1; float protectUntil; string flipLog = "";
+    // for the camera: a flip is on, and the middle of the body (the point the flip turns around)
+    public static float FlipPivot = 0.45f;     // the flip turns around this point above the board (m)
+    public static bool FlipNow; public static float FlipCenterTime; public static Vector3 FlipVel;
+    Vector3 flipHVel; public static float FlipEndTime = -10f; public static Vector3 FlipCenter;
+    void StartFlip(float dir)
+    {
+        Vector3 r = sp.transform.right; r.y = 0f;
+        if (r.sqrMagnitude < 0.01f) return;
+        flipAxis = r.normalized; flipDir = dir; flipping = true; flipUsed = true;
+        float left = TimeToGround();
+        if (left < 0.35f && flipLift > 0f)
+        {   // almost no air: a small lift (at most 2.5 m/s up), so the flip has time
+            float g = sp.skPhysics.gravity.magnitude; if (g < 1f) g = 25f;
+            Vector3 v = sp.skPhysics.velocity;
+            float vy = Mathf.Min(g * 0.4f * 0.5f, Mathf.Max(v.y, 0f) + flipLift);
+            if (vy > v.y) { v.y = vy; sp.skPhysics.velocity = v; lastVel = v; }
+            left = TimeToGround();
+        }
+        flipStart = Time.time;
+        flipEnd = flipStart + Mathf.Clamp(Mathf.Min(flipFeel * flipTurns, left - flipMargin), 0.25f, 1.6f);
+        flipLog = "flip start air=" + left.ToString("0.00") + " dur=" + (flipEnd - flipStart).ToString("0.00");
+    }
+    // the time until the board comes down: from the height above the ground and the up and down speed
+    float TimeToGround()
+    {
+        float g = sp.skPhysics.gravity.magnitude; if (g < 1f) g = 25f;
+        float vy = sp.skPhysics.velocity.y;
+        Vector3 o = sp.transform.position + Vector3.up * 0.3f;
+        int n = UnityEngine.Physics.RaycastNonAlloc(o, Vector3.down, groundHits, 30f, ~0, QueryTriggerInteraction.Ignore);
+        Transform me = ThePlayer.instance != null ? ThePlayer.instance.transform : null;
+        float d = 30f;
+        for (int i = 0; i < n; i++)
+            if (groundHits[i].collider != null && (me == null || !groundHits[i].collider.transform.IsChildOf(me)) && groundHits[i].distance < d) d = groundHits[i].distance;
+        d = Mathf.Max(0f, d - 0.3f);
+        return (vy + Mathf.Sqrt(Mathf.Max(0f, vy * vy + 2f * g * d))) / g;
+    }
+    public float flipStart, flipEnd;
+
+    static bool Held(KeyCode[] k)
+    {
+        if (k == null || k.Length < 2 || k[0] == KeyCode.None || k[1] == KeyCode.None) return false;
+        return Input.GetKey(k[0]) && Input.GetKey(k[1]);
+    }
+    static string KeyName(KeyCode k)
+    {
+        switch (k)
+        {
+            case KeyCode.JoystickButton0: return "A";
+            case KeyCode.JoystickButton1: return "B";
+            case KeyCode.JoystickButton2: return "X";
+            case KeyCode.JoystickButton3: return "Y";
+            case KeyCode.JoystickButton4: return "LB";
+            case KeyCode.JoystickButton5: return "RB";
+            case KeyCode.JoystickButton6: return "Back";
+            case KeyCode.JoystickButton7: return "Start";
+            case KeyCode.JoystickButton8: return "Left stick click";
+            case KeyCode.JoystickButton9: return "Right stick click";
+            case KeyCode.None: return "(none)";
+        }
+        return k.ToString();
+    }
+    static string Combo(KeyCode[] k) { return KeyName(k[0]) + " + " + KeyName(k[1]); }
+    // waiting for new flip buttons: the first two buttons that are held together
+    List<KeyCode> held = new List<KeyCode>(); static KeyCode[] allKeys;
+    void Bind()
+    {
+        if (allKeys == null)
+        {
+            List<KeyCode> l = new List<KeyCode>();
+            foreach (KeyCode k in (KeyCode[])Enum.GetValues(typeof(KeyCode)))
+                if (k != KeyCode.None && k != KeyCode.Mouse0 && k != KeyCode.Mouse1 && k != KeyCode.Escape && (int)k < (int)KeyCode.Joystick1Button0) l.Add(k);
+            allKeys = l.ToArray();
+        }
+        if (Input.GetKey(KeyCode.Escape)) { binding = 0; held.Clear(); status = "No change to the flip buttons."; return; }
+        foreach (KeyCode k in allKeys) if (Input.GetKey(k) && !held.Contains(k)) held.Add(k);
+        held.RemoveAll(k => !Input.GetKey(k));
+        if (held.Count >= 2)
+        {
+            KeyCode[] n = { held[0], held[1] };
+            if (binding == 1) frontKeys = n; else backKeys = n;
+            status = (binding == 1 ? "Front flip: " : "Back flip: ") + Combo(n);
+            binding = 0; held.Clear(); dirty = true;
+        }
+    }
+
+    // ---------- the drawn flip ----------
+    // The physics body does not turn. Just before a frame is drawn, the drawn skater (the final skater mesh) and the drawn
+    // board turn around the middle of the body; just after the frame, they go back. So the flip is smooth at the full frame
+    // rate, the game's jump and speed do not change, and the game camera (already placed for this frame) does not see it.
+    public static MoveTools inst;
+    static bool hooked;
+    public static void HookCameras()
+    {
+        if (hooked) return; hooked = true;
+        Camera.onPreCull += c => { if (inst != null && c != null && c == Camera.main) { try { inst.BeforeDraw(c); } catch (Exception) { } } };
+        Camera.onPostRender += c => { if (inst != null && c != null && c == Camera.main) inst.AfterDraw(); };
+    }
+    bool drawnTurned; int drawnFrame = -1;
+    Transform[] drawnParts = new Transform[2]; Vector3[] drawnPos = new Vector3[2]; Quaternion[] drawnRot = new Quaternion[2];
+    public float FlipAngle()
+    {
+        if (!flipping) return 0f;
+        float u = Mathf.Clamp01((Time.time - flipStart) / Mathf.Max(0.05f, flipEnd - flipStart));
+        // a fast start (the skater leans into it), and a soft end
+        float e = 1f - Mathf.Pow(1f - u, flipSharp);
+        e = Mathf.Lerp(e, u * u * (3f - 2f * u), flipSoft);
+        return 360f * flipTurns * e * flipDir;
+    }
+    public void BeforeDraw(Camera c)
+    {
+        if (drawnTurned || drawnFrame == Time.frameCount) return;
+        if (!flipping || sp == null || sp.board == null) return;
+        ThePlayer p = ThePlayer.instance;
+        if (p == null || p.finalSkaterMesh == null) return;
+        if (Time.time >= flipEnd) { flipping = false; return; }
+        float a = FlipAngle();
+        Transform board = sp.board.transform;
+        Vector3 pivot = board.position + board.up * FlipPivot;
+        Quaternion q = Quaternion.AngleAxis(a, flipAxis);
+        // the body and the shoes are drawn from the skeleton: turn its root bone (or the whole final mesh object)
+        Transform body = p.finalSkaterMesh.skaterMeshRenderer != null && p.finalSkaterMesh.skaterMeshRenderer.rootBone != null
+            ? p.finalSkaterMesh.skaterMeshRenderer.rootBone : p.finalSkaterMesh.transform;
+        drawnParts[0] = body; drawnParts[1] = board;
+        for (int i = 0; i < 2; i++)
+        {
+            Transform t = drawnParts[i];
+            drawnPos[i] = t.position; drawnRot[i] = t.rotation;
+            t.SetPositionAndRotation(pivot + q * (t.position - pivot), q * t.rotation);
+        }
+        drawnTurned = true; drawnFrame = Time.frameCount;
+    }
+    public void AfterDraw()
+    {
+        if (!drawnTurned) return;
+        for (int i = 0; i < 2; i++) if (drawnParts[i] != null) drawnParts[i].SetPositionAndRotation(drawnPos[i], drawnRot[i]);
+        drawnTurned = false;
+    }
+
+    // no bails during the flip and for a short time after the landing
+    void Protect(bool on)
+    {
+        if (on) { if (savedGodFlip < 0) savedGodFlip = SkateSingleton.GODMODE; SkateSingleton.GODMODE = 1; protectUntil = 1e30f; }
+        else protectUntil = Time.time + 0.6f;
+    }
+    void ProtectTick()
+    {
+        if (binding != 0) Bind();
+        if (savedGodFlip >= 0 && Time.time > protectUntil)
+        {
+            SkateSingleton.GODMODE = noBails ? 1 : savedGodFlip;
+            savedGodFlip = -1;
+        }
+    }
+    // turn the skater around a world axis through the middle of the body (about 0.7 m above the board)
+    void TurnAround(Vector3 axis, float deg)
+    {
+        FlipCenter = sp.transform.position + sp.transform.up * FlipPivot;
+        FlipCenterTime = Time.time; FlipVel = sp.skPhysics.velocity;
+        Quaternion q = Quaternion.AngleAxis(deg, axis);
+        Vector3 pivot = sp.transform.position + sp.transform.up * FlipPivot;
+        Vector3 np = pivot + q * (sp.transform.position - pivot);
+        TurnSmoothed(q);
+        TurnSmoothedPos(q, pivot);
+        sp.transform.SetPositionAndRotation(np, q * sp.transform.rotation);
+        SkateInterpolatedTransform s = Sit();
+        if (s != null)
+        {
+            // the same turn on the saved pose (local to the parent), around its own middle of the body
+            Transform p = sp.transform.parent;
+            Quaternion pr = p != null ? p.rotation : Quaternion.identity;
+            Quaternion ql = Quaternion.Inverse(pr) * q * pr;
+            TransformState c = s.current;
+            Quaternion cr = (Quaternion)c.rot; Vector3 cp = (Vector3)c.pos;
+            Vector3 piv = cp + cr * Vector3.up * FlipPivot;
+            c.pos = piv + ql * (cp - piv);
+            c.rot = ql * cr;
+            s.current = c;
+        }
+    }
+
+    // After a spin: turn the skater on to the nearest half turn of the direction of travel (regular or switch), fast,
+    // so that the game's own slow turn back has nothing to do and you do not land facing the wrong way.
+    void SettleSpin(float dt, bool now)
+    {
+        Vector3 v = sp.skPhysics.velocity; v.y = 0f;
+        Vector3 f = sp.transform.forward; f.y = 0f;
+        if (v.sqrMagnitude < 0.25f || f.sqrMagnitude < 0.01f) { spinAdded = 0f; return; }
+        float a = Vector3.SignedAngle(f, v, Vector3.up);
+        float r = a - Mathf.Round(a / 180f) * 180f;          // the rest to the nearest half turn
+        float d = now ? r : Mathf.MoveTowards(0f, r, 900f * dt);
+        TurnWorldYaw(d);
+        st_turn(d);
+        if (Mathf.Abs(r - d) < 0.5f) spinAdded = 0f;
+    }
+    // The game keeps a saved pose of the skater for its own interpolation, and puts it back before each physics step.
+    // A turn must go into that saved pose too, or the game throws it away.
+    SkateInterpolatedTransform sit;
+    SkateInterpolatedTransform Sit() { if (sit == null || sit.gameObject != sp.gameObject) sit = sp.GetComponent<SkateInterpolatedTransform>(); return sit; }
+    // The drawn body follows the board through two smoothed angles. With a fast turn, the smoothing takes the short way
+    // around and the body stays behind (the legs twist). These angles get the same turn as the board.
+    static System.Reflection.FieldInfo smoothParent, smoothBody, smoothPos, smoothPosVel;
+    // the drawn body also follows a smoothed point above the board (in world space): it gets the same turn around the pivot
+    void TurnSmoothedPos(Quaternion q, Vector3 pivot)
+    {
+        const System.Reflection.BindingFlags B = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        if (smoothPos == null) smoothPos = typeof(SkatePlayer).GetField("skaterBodyParentSmoothPos", B);
+        if (smoothPosVel == null) smoothPosVel = typeof(SkatePlayer).GetField("skaterBodyParentSmoothPosVelocity", B);
+        try
+        {
+            if (smoothPos != null) { Vector3 p = (Vector3)smoothPos.GetValue(sp); smoothPos.SetValue(sp, pivot + q * (p - pivot)); }
+            if (smoothPosVel != null) { Vector3 v = (Vector3)smoothPosVel.GetValue(sp); smoothPosVel.SetValue(sp, q * v); }
+        }
+        catch (Exception) { }
+    }
+    void TurnSmoothed(Quaternion worldDelta)
+    {
+        const System.Reflection.BindingFlags B = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        if (smoothParent == null) smoothParent = typeof(SkatePlayer).GetField("_skaterBodyParentSmoothRot", B);
+        if (smoothBody == null) smoothBody = typeof(SkatePlayer).GetField("skaterBodySmoothRot", B);
+        try
+        {
+            if (smoothParent != null) smoothParent.SetValue(sp, worldDelta * (Quaternion)smoothParent.GetValue(sp));
+            if (smoothBody != null) smoothBody.SetValue(sp, worldDelta * (Quaternion)smoothBody.GetValue(sp));
+        }
+        catch (Exception) { }
+    }
+    void TurnLocalYaw(float deg)
+    {
+        Quaternion q = Quaternion.Euler(0f, deg, 0f);
+        Quaternion r0 = sp.transform.rotation;
+        TurnSmoothed(r0 * q * Quaternion.Inverse(r0));
+        TurnSmoothedPos(r0 * q * Quaternion.Inverse(r0), sp.transform.position);
+        sp.transform.rotation = sp.transform.rotation * q;
+        SkateInterpolatedTransform s = Sit();
+        if (s != null) { TransformState c = s.current; c.rot = (Quaternion)c.rot * q; s.current = c; }
+    }
+    void TurnWorldYaw(float deg)
+    {
+        Quaternion q = Quaternion.AngleAxis(deg, Vector3.up);
+        TurnSmoothed(q);
+        TurnSmoothedPos(q, sp.transform.position);
+        sp.transform.rotation = q * sp.transform.rotation;
+        SkateInterpolatedTransform s = Sit();
+        if (s != null)
+        {   // the saved pose is local to the parent
+            Transform p = sp.transform.parent;
+            Quaternion ql = p != null ? Quaternion.Inverse(p.rotation) * q * p.rotation : q;
+            TransformState c = s.current; c.rot = ql * (Quaternion)c.rot; s.current = c;
+        }
+    }
+    void st_turn(float d) { sp.skState.degreesTurnedInAir += d; sp.skState.degreesTurnedInAir_abs += Mathf.Abs(d); }
+    void Landed()
+    {
+        flipping = false; pendingDir = 0f;
+        spinAdded = 0f; measured = 0f; haveYaw = false;
+        Vector3 tgt = sp.stance.StanceRotationTarget;
+        // take full turns out of the flip angle, in the target and in the shown angle, so the skater does not turn back
+        float k = Mathf.Round(tgt.x / 360f) * 360f;
+        if (k != 0f)
+        {
+            tgt.x -= k;
+            try
+            {
+                if (stanceNow == null) stanceNow = typeof(SkatePlayer).GetField("<skateAnimatorStanceRotation>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (stanceNow != null) { Vector3 now = (Vector3)stanceNow.GetValue(sp); now.x -= k; stanceNow.SetValue(sp, now); }
+            }
+            catch (Exception) { }
+        }
+        sp.stance.StanceRotationTarget = tgt;
+    }
+    // is the ground close below the skater, at this fall speed?
+    bool GroundSoon()
+    {
+        Vector3 v = sp.skPhysics.velocity;
+        if (v.y > 0f) return false;
+        float reach = 0.8f + Mathf.Max(0f, -v.y) * 0.3f;
+        Vector3 o = sp.transform.position + Vector3.up * 0.3f;
+        int n = UnityEngine.Physics.RaycastNonAlloc(o, Vector3.down, groundHits, reach + 0.3f, ~0, QueryTriggerInteraction.Ignore);
+        Transform me = ThePlayer.instance != null ? ThePlayer.instance.transform : null;
+        for (int i = 0; i < n; i++)
+            if (groundHits[i].collider != null && (me == null || !groundHits[i].collider.transform.IsChildOf(me))) return true;
+        return false;
+    }
+    static RaycastHit[] groundHits = new RaycastHit[16];
 
     // ---------- jump height ----------
     // The game sets lastPopForce at the moment it adds the jump force to the speed. A new value means a new jump.
@@ -221,7 +671,7 @@ public class MoveTools
         else if (!noDamage && damageTouched) { if (h != null) h.invulnerableDelay = 0.2f; damageTouched = false; }
         // No bails: the game's own god mode.
         if (noBails) { if (savedGod < 0) savedGod = SkateSingleton.GODMODE; SkateSingleton.GODMODE = 1; }
-        else if (savedGod >= 0) { SkateSingleton.GODMODE = savedGod; savedGod = -1; }
+        else if (savedGod >= 0 && savedGodFlip < 0) { SkateSingleton.GODMODE = savedGod; savedGod = -1; }
     }
     int myHp = -1, lastSet = -1; float lastHitSeen = -1f;
     void FragileHealth()
@@ -394,6 +844,7 @@ public class MoveTools
         if (status.Length > 0) GUILayout.Label(status);
         if (sp == null) GUILayout.Label("The skater is not loaded yet. The speed changes start when you ride the board.");
         GUILayout.Space(6);
+        scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(600));
         GUILayout.BeginHorizontal();
         GUILayout.BeginVertical(GUILayout.Width(480));
         GUILayout.Label("SPEED");
@@ -430,6 +881,43 @@ public class MoveTools
         GUILayout.EndVertical();
         GUILayout.Space(20);
         GUILayout.BeginVertical(GUILayout.Width(480));
+        GUILayout.Label("AIR TRICKS");
+        spinOn = Toggle(spinOn, " Keep spinning for the full jump (spin past 360)");
+        if (spinOn) spinMul = Slider("   Spin speed", spinMul, 0.25f, 3f, "0.00", "x");
+        flipOn = Toggle(flipOn, " Flips: in the air, hold two buttons together");
+        if (flipOn)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("   Front flip:  " + (binding == 1 ? "hold the two buttons now... (Esc = no change)" : Combo(frontKeys)), GUILayout.Width(360));
+            if (GUILayout.Button("Change", GUILayout.Width(70))) { binding = 1; held.Clear(); }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("   Back flip:  " + (binding == 2 ? "hold the two buttons now... (Esc = no change)" : Combo(backKeys)), GUILayout.Width(360));
+            if (GUILayout.Button("Change", GUILayout.Width(70))) { binding = 2; held.Clear(); }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("   Turns", GUILayout.Width(180));
+            if (GUILayout.Toggle(flipTurns == 1, "Single", GUI.skin.button, GUILayout.Width(80)) && flipTurns != 1) { flipTurns = 1; dirty = true; }
+            if (GUILayout.Toggle(flipTurns == 2, "Double", GUI.skin.button, GUILayout.Width(80)) && flipTurns != 2) { flipTurns = 2; dirty = true; }
+            GUILayout.EndHorizontal();
+            flipDelay = Slider("   Start delay", flipDelay, 0f, 0.4f, "0.00", " s");
+            flipFeel = Slider("   Flip time (per turn)", flipFeel, 0.4f, 1f, "0.00", " s");
+            flipSharp = Slider("   Start speed", flipSharp, 1f, 4f, "0.0", "");
+            flipSoft = Slider("   Soft end", flipSoft, 0f, 1f, "0.00", "");
+            FlipPivot = Slider("   Turn point", FlipPivot, 0f, 1.2f, "0.00", " m");
+            flipMargin = Slider("   Finish before landing", flipMargin, 0f, 0.25f, "0.00", " s");
+            flipLift = Slider("   Lift on short jumps", flipLift, 0f, 6f, "0.0", " m/s");
+            GUILayout.Label("   Start delay: time after you leave the ground. Start speed: 1 = even, 4 = a hard lean in.");
+            GUILayout.Label("   Soft end: 0 = fast to the end, 1 = slows into the landing. Turn point: 0 = around the board, 1 = around the chest.");
+            if (GUILayout.Button("Flip settings back to the start values", GUILayout.Width(280)))
+            { flipDelay = DefDelay; flipSharp = DefSharp; flipSoft = DefSoft; FlipPivot = DefPivot; flipMargin = DefMargin; flipLift = DefLift; flipFeel = 0.65f; flipTurns = 1; dirty = true; }
+            flipStick = Toggle(flipStick, " Also flip with the stick (up = front, down = back)");
+            GUILayout.Label("   One flip per jump. Hold the buttons as you pop for the fastest start. A flip always ends before you land.");
+        }
+        bool lg = GUILayout.Toggle(spinLog, " Test log for spins (writes ShoeMod/spinlog.txt, not saved)");
+        if (lg != spinLog) { spinLog = lg; logLines = 0; }
+
+        GUILayout.Space(12);
         GUILayout.Label("GRINDS");
         snapOn = Toggle(snapOn, " Snap onto rails: in the air above a rail, you are pulled onto it");
         if (snapOn) snapRadius = Slider("   Snap distance", snapRadius, 0.25f, 2f, "0.00", " m");
@@ -449,7 +937,8 @@ public class MoveTools
         GUILayout.EndVertical();
         GUILayout.EndHorizontal();
         GUILayout.Space(12);
+        GUILayout.EndScrollView();
         if (GUILayout.Button("All movement back to the game settings", GUILayout.Width(300)))
-        { pushOn = slideOn = slowOn = trickSlowOn = snapOn = stickyOn = jumpOn = noFragile = noDamage = noBails = false; dirty = true; status = "Movement is back to the game settings."; }
+        { pushOn = slideOn = slowOn = trickSlowOn = snapOn = stickyOn = jumpOn = noFragile = noDamage = noBails = spinOn = flipOn = false; dirty = true; status = "Movement is back to the game settings."; }
     }
 }

@@ -19,7 +19,8 @@ to the game's own start-up list (`ScriptingAssemblies.json` and `RuntimeInitiali
 - Skate Story installed (game version of November 2026). The DLLs come from `SkateStory_Data\Managed`:
   mscorlib, System, System.Core, UnityEngine.CoreModule, UnityEngine.IMGUIModule, UnityEngine.TextRenderingModule,
   UnityEngine.InputLegacyModule, UnityEngine.UIModule, UnityEngine.UI, Unity.Postprocessing.Runtime,
-  UnityEngine.PhysicsModule, Unity.Addressables, Unity.ResourceManager, UnityEngine.ParticleSystemModule, Assembly-CSharp.
+  UnityEngine.PhysicsModule, Unity.Addressables, Unity.ResourceManager, UnityEngine.ParticleSystemModule, Assembly-CSharp,
+  and on `main` also Unity.Mathematics.
 - A C# compiler. One of:
   - Windows: `csc.exe` of .NET Framework 4, which comes with Windows
     (`%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`).
@@ -37,9 +38,14 @@ Linux or macOS (with a copy of the game folder):
 
 The output goes to `build/`.
 
+## Branches
+
+- `main`: version 1.2.0 (in development). It adds `WarpTools.cs`, `SubTools.cs` and a reference to `Unity.Mathematics.dll`. The build scripts include them.
+- `release-1.1.0`: the exact source of the released 1.1.0. The checksums below are for that branch.
+
 ## Check the result against the release
 
-With Mono 6.8 `mcs`, the build is byte for byte the same as the release files:
+With Mono 6.8 `mcs`, a build of the `release-1.1.0` branch is byte for byte the same as the 1.1.0 release files:
 
     ShoeMod.dll           SHA-256  818cffc4e4a0d85ac7bf31a3a0a1ff9c69862b0543db9dcb906e812455deb45e
     ShoeModInstaller.exe  SHA-256  c2c31d5f293557192031dccd111e6e37a4416c64c26785a40e65069dbda729bf
@@ -47,8 +53,7 @@ With Mono 6.8 `mcs`, the build is byte for byte the same as the release files:
 Windows: `certutil -hashfile build\ShoeMod.dll SHA256`.  Linux: `sha256sum build/*`.
 The Windows `csc.exe` makes a different file (other compiler), with the same code.
 
-Note: the comment at the top of `ShoeMod.cs` and its start-up log line still say 1.0.0. The released 1.1.0 DLL is
-built from these exact files (the checksums above prove it). The text is updated in the next version.
+Note: on the `release-1.1.0` branch, the comment at the top of `ShoeMod.cs` and its start-up log line say 1.0.0. That is only text; the checksums above prove that the 1.1.0 DLL is built from those files. On `main` the text says 1.2.0.
 
 ## The patch files
 

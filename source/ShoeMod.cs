@@ -1,4 +1,4 @@
-// Shoe and Board Editor for Skate Story (ShoeMod), version 1.0.0.  Press F6 in the game.
+// In-Game Editor for Skate Story (ShoeMod), version 1.2.0 (in development).  Press F6 in the game.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -18,7 +18,7 @@ public static class ShoeModLoader
             GameObject go = new GameObject("ShoeMod");
             UnityEngine.Object.DontDestroyOnLoad(go);
             go.AddComponent<ShoeModBehaviour>();
-            Debug.Log("[ShoeMod] loaded (version 1.0.0)");
+            Debug.Log("[ShoeMod] loaded (version 1.2.0 dev)");
         }
         catch (Exception e) { Debug.Log("[ShoeMod] start failed: " + e); }
     }
@@ -77,6 +77,8 @@ public class ShoeModBehaviour : MonoBehaviour
     CameraTools camTools; bool camTab;
     MoveTools moveTools = new MoveTools(); bool moveTab;
     FxTools fxTools = new FxTools(); bool fxTab;
+    WarpTools warpTools = new WarpTools(); bool warpTab;
+    SubTools subTools = new SubTools();
     bool hideScarf; List<SkinnedMeshRenderer> scarves = new List<SkinnedMeshRenderer>();
     MaterialPropertyBlock mpb;
     GameObject cursorHelper;
@@ -218,6 +220,7 @@ public class ShoeModBehaviour : MonoBehaviour
                 if (line.StartsWith("board=")) sBoard = line.Substring(6);
                 if (line.Trim() == "scarf=0") hideScarf = true;
                 screen.Load(line);
+                subTools.Load(line);
                 camTools.Load(line);
                 moveTools.Load(line);
                 fxTools.Load(line);
@@ -244,6 +247,7 @@ public class ShoeModBehaviour : MonoBehaviour
             sb.Append("board=").Append(board.currentBuiltIn ? "B:" : "U:").Append(board.currentName).Append('\n');
             sb.Append("scarf=").Append(hideScarf ? "0" : "1").Append('\n');
             screen.Write(sb);
+            subTools.Write(sb);
             camTools.Write(sb);
             moveTools.Write(sb);
             fxTools.Write(sb);
@@ -623,6 +627,8 @@ public class ShoeModBehaviour : MonoBehaviour
         moveTools.Update(now);
         if (moveTools.dirty && drag == 0) { moveTools.dirty = false; SaveState(); }
         fxTools.Update(now);
+        SceneLoads.Hook();
+        warpTools.Update(now);
         if (fxTools.dirty) { fxTools.dirty = false; SaveState(); }
         if (now >= nextScan)
         {
@@ -647,6 +653,8 @@ public class ShoeModBehaviour : MonoBehaviour
     void LateUpdate()
     {
         screen.LateUpdate();
+        try { subTools.LateUpdate(); } catch (Exception) { }
+        if (subTools.dirty) { subTools.dirty = false; SaveState(); }
         camTools.LateUpdate();
         fxTools.LateUpdate();
         if (open) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
@@ -676,7 +684,7 @@ public class ShoeModBehaviour : MonoBehaviour
         Event e = Event.current;
         if (e.type == EventType.KeyDown && e.keyCode == KeyCode.F6) { SetOpen(!open); e.Use(); }
         if (!open) return;
-        if (e.type == EventType.Repaint && tab.core != null && !screenTab && !camTab && !moveTab && !fxTab)
+        if (e.type == EventType.Repaint && tab.core != null && !screenTab && !camTab && !moveTab && !fxTab && !warpTab)
         {
             try
             {
@@ -689,7 +697,7 @@ public class ShoeModBehaviour : MonoBehaviour
         Matrix4x4 old = GUI.matrix;
         GUI.matrix = Matrix4x4.Scale(new Vector3(s, s, 1f));
         int total = tab.builtIn.Length + tab.designs.Count;
-        win.width = 1010f; win.height = fxTab ? 640f : moveTab ? 660f : camTab ? 610f : screenTab ? 560f : (tab == shoes ? 690f : 600f) + (tab.listOpen ? Mathf.Min(196, total * 26 + 6) + 8f : 0f);
+        win.width = 1010f; win.height = warpTab ? 640f : fxTab ? 640f : moveTab ? 700f : camTab ? 610f : screenTab ? 560f : (tab == shoes ? 690f : 600f) + (tab.listOpen ? Mathf.Min(196, total * 26 + 6) + 8f : 0f);
         win = GUI.Window(51515, win, DrawWindow, "Shoe and Board Editor 1.0   (F6 to close)");
         GUI.matrix = old;
     }
@@ -825,21 +833,23 @@ public class ShoeModBehaviour : MonoBehaviour
     void DrawWindow(int id)
     {
         GUILayout.BeginHorizontal();
-        bool painterTab = !screenTab && !camTab && !moveTab && !fxTab;
-        if (GUILayout.Toggle(tab == shoes && painterTab, "Shoes", GUI.skin.button, GUILayout.Width(95)) && !(tab == shoes && painterTab)) { tab = shoes; screenTab = camTab = moveTab = fxTab = false; focusField = 0; }
-        if (GUILayout.Toggle(tab == board && painterTab, "Board", GUI.skin.button, GUILayout.Width(95)) && !(tab == board && painterTab)) { tab = board; screenTab = camTab = moveTab = fxTab = false; focusField = 0; nextDeckScan = 0f; }
-        if (GUILayout.Toggle(screenTab, "Screen", GUI.skin.button, GUILayout.Width(95)) && !screenTab) { screenTab = true; camTab = moveTab = fxTab = false; focusField = 0; }
-        if (GUILayout.Toggle(camTab, "Camera", GUI.skin.button, GUILayout.Width(95)) && !camTab) { camTab = true; screenTab = moveTab = fxTab = false; focusField = 0; }
-        if (GUILayout.Toggle(moveTab, "Movement", GUI.skin.button, GUILayout.Width(95)) && !moveTab) { moveTab = true; screenTab = camTab = fxTab = false; focusField = 0; }
-        if (GUILayout.Toggle(fxTab, "Effects", GUI.skin.button, GUILayout.Width(95)) && !fxTab) { fxTab = true; screenTab = camTab = moveTab = false; focusField = 0; }
+        bool painterTab = !screenTab && !camTab && !moveTab && !fxTab && !warpTab;
+        if (GUILayout.Toggle(tab == shoes && painterTab, "Shoes", GUI.skin.button, GUILayout.Width(95)) && !(tab == shoes && painterTab)) { tab = shoes; screenTab = camTab = moveTab = fxTab = warpTab = false; focusField = 0; }
+        if (GUILayout.Toggle(tab == board && painterTab, "Board", GUI.skin.button, GUILayout.Width(95)) && !(tab == board && painterTab)) { tab = board; screenTab = camTab = moveTab = fxTab = warpTab = false; focusField = 0; nextDeckScan = 0f; }
+        if (GUILayout.Toggle(screenTab, "Screen", GUI.skin.button, GUILayout.Width(95)) && !screenTab) { screenTab = true; camTab = moveTab = fxTab = warpTab = false; focusField = 0; }
+        if (GUILayout.Toggle(camTab, "Camera", GUI.skin.button, GUILayout.Width(95)) && !camTab) { camTab = true; screenTab = moveTab = fxTab = warpTab = false; focusField = 0; }
+        if (GUILayout.Toggle(moveTab, "Movement", GUI.skin.button, GUILayout.Width(95)) && !moveTab) { moveTab = true; screenTab = camTab = fxTab = warpTab = false; focusField = 0; }
+        if (GUILayout.Toggle(fxTab, "Effects", GUI.skin.button, GUILayout.Width(95)) && !fxTab) { fxTab = true; screenTab = camTab = moveTab = warpTab = false; focusField = 0; }
+        if (GUILayout.Toggle(warpTab, "Levels", GUI.skin.button, GUILayout.Width(95)) && !warpTab) { warpTab = true; screenTab = camTab = moveTab = fxTab = false; focusField = 0; }
         GUILayout.Space(16);
         bool sh = GUILayout.Toggle(!hideScarf, " Show scarf", GUILayout.Width(100));
         if (sh == hideScarf) { hideScarf = !sh; nextScan = 0f; SaveState(); }
         GUILayout.Label(status);
         GUILayout.EndHorizontal();
-        if (screenTab) { screen.Draw(); GUI.DragWindow(new Rect(0, 0, 10000, 22)); return; }
+        if (screenTab) { screen.Draw(); subTools.Draw(); GUI.DragWindow(new Rect(0, 0, 10000, 22)); return; }
         if (camTab) { camTools.Draw(); GUI.DragWindow(new Rect(0, 0, 10000, 22)); return; }
         if (moveTab) { moveTools.Draw(); GUI.DragWindow(new Rect(0, 0, 10000, 22)); return; }
+        if (warpTab) { warpTools.Draw(); GUI.DragWindow(new Rect(0, 0, 10000, 22)); return; }
         if (fxTab) { fxTools.Draw(); GUI.DragWindow(new Rect(0, 0, 10000, 22)); return; }
         Painter p = tab;
         DesignBar(p);

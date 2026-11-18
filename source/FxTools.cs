@@ -73,7 +73,7 @@ public class FxTools
     List<Found> found = new List<Found>();
     HashSet<string> hiddenThings = new HashSet<string>();      // key = parent name + "/" + object name
     Dictionary<Renderer, bool> hiddenThingR = new Dictionary<Renderer, bool>();
-    List<Renderer> thingCache = new List<Renderer>(); float nextThingScan;
+    List<Renderer> thingCache = new List<Renderer>(); float nextThingScan; int seenLoads = -1, loadScans;
     static string KeyOf(Renderer r) { Transform t = r.transform; return (t.parent != null ? t.parent.name : "") + "/" + t.name; }
 
     ThePlayer player; SkatePlayer sp; float nextFind, nextRetry;
@@ -197,9 +197,11 @@ public class FxTools
     void HideThings()
     {
         float now = Time.unscaledTime;
-        if (hiddenThings.Count > 0 && now >= nextThingScan)
+        // a search of all drawn objects is slow: only after a change to the list, and twice after a level loads
+        if (SceneLoads.count != seenLoads) { seenLoads = SceneLoads.count; loadScans = 2; nextThingScan = now + 1f; }
+        if (hiddenThings.Count > 0 && now >= nextThingScan && nextThingScan >= 0f)
         {
-            nextThingScan = now + 2f;
+            if (loadScans > 0) { loadScans--; nextThingScan = loadScans > 0 ? now + 4f : -1f; } else nextThingScan = -1f;
             thingCache.Clear();
             Transform b = BoardT();
             if (b != null)
@@ -275,6 +277,14 @@ public class FxTools
             if (root == null) continue;
             GameObject c = UnityEngine.Object.Instantiate(root.gameObject, root.parent, false);
             c.name = "ShoeMod copy of " + root.name;
+            // fire wheel trails: each trail follows a wheel. The copy gets the wheel of the original, and a trail with no
+            // wheel is turned off (the game sets the wheels of the originals when it needs them).
+            SkateWheelFX[] orig = root.GetComponentsInChildren<SkateWheelFX>(true), mine = c.GetComponentsInChildren<SkateWheelFX>(true);
+            for (int i = 0; i < mine.Length; i++)
+            {
+                if (i < orig.Length && orig[i].wheel != null) mine[i].wheel = orig[i].wheel;
+                if (mine[i].wheel == null) mine[i].enabled = false;
+            }
             c.SetActive(true);
             // the copy starts with the drawing on, also when the original is turned off
             foreach (Renderer r in c.GetComponentsInChildren<Renderer>(true)) r.enabled = true;
@@ -283,6 +293,7 @@ public class FxTools
     }
     static void KeepPlaying(GameObject c)
     {
+        foreach (SkateWheelFX w in c.GetComponentsInChildren<SkateWheelFX>(true)) if (w.enabled && w.wheel == null) w.enabled = false;
         foreach (ParticleSystem p in c.GetComponentsInChildren<ParticleSystem>(false))
         {
             ParticleSystem.EmissionModule em = p.emission;
