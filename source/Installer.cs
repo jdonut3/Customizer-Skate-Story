@@ -65,7 +65,7 @@ static class Program
         try { Console.Title = "Skate Story In-Game Editor"; } catch (Exception) { }
         tee = new Tee(Console.Out); Console.SetOut(tee);
         Console.WriteLine("Time: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "   Windows: " + Environment.OSVersion + "   .NET: " + Environment.Version);
-        Console.WriteLine("Skate Story In-Game Editor 1.1.0 - installer");
+        Console.WriteLine("Skate Story In-Game Editor 1.2.0 (in development) - installer");
         Console.WriteLine();
         try
         {

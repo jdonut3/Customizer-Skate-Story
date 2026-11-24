@@ -16,6 +16,7 @@
 - Tricks: darkslide (in a grind) and hippy jump (the game's ollie, the board stays on the ground).
 - Editor: park editor on a grid with nine block kinds and materials from the game. Pipes have a vert ride that keeps the skater on the ramp. The editor also works in any game level, and the blocks are saved per level.
 - The version text in `ShoeMod.cs` now says 1.2.0.
+- The repository now holds the full mod: the patch files, the package readme, `package.sh`, and a ready-to-install ZIP file in `dist/`. The installer says 1.2.0 (in development).
 
 ## 1.1.0
 

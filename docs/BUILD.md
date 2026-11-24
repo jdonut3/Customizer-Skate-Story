@@ -62,3 +62,9 @@ The ZIP holds no game files. Each `.smp` file holds only the changed bytes, plus
 The installer applies a patch only when the SHA-256 of the user's file is the original one, checks the SHA-256 of the result,
 and keeps a backup of the original. The format and the code that makes and applies the patches are in `tools/mkpatch.py`
 and `source/Installer.cs` (class `Patch`).
+
+## Make the installable ZIP file
+
+Run `./package.sh "/path/to/Skate Story"`. It runs `build.sh`, then puts `ShoeMod.dll`, `ShoeModInstaller.exe`,
+`package/README.txt`, the files in `patches/` and the source files into `build/ShoeMod-1.2.0-dev.zip`.
+The copy in `dist/` is made this way.

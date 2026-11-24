@@ -28,7 +28,9 @@ No separate mod loader is required by the release instructions.
 
 ## Installation
 
-Download the packaged release from Nexus Mods and follow the instructions included with that release. This source repository is not an installer and cannot install the mod by itself.
+The stable release (1.1.0) is on Nexus Mods.
+
+The newest development build (1.2.0) is in this repository: download [`dist/ShoeMod-1.2.0-dev.zip`](dist/ShoeMod-1.2.0-dev.zip), extract the full ZIP file, start `ShoeModInstaller.exe` and type 1. The instructions are in `README.txt` in the ZIP file. Some new features in this build are not fully tested.
 
 ## Source layout
 
@@ -50,6 +52,13 @@ source/
   TrickTools.cs    Darkslide and hippy jump (1.2.0)
   TextDump.cs      Writes the game's text tables to files (1.2.0)
   Installer.cs     Windows installer and patch/restore logic
+```
+
+```text
+patches/           Patch files for the shoe, costume and deck asset files (only the changes, no game files)
+package/README.txt The readme that goes in the ZIP file
+dist/              The ready-to-install ZIP file of the development build
+package.sh         Builds the mod and makes the ZIP file
 ```
 
 ## Building
