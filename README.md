@@ -42,6 +42,13 @@ source/
   CameraTools.cs   Camera and post-processing controls
   WarpTools.cs     Levels tab: free skate in any level (1.2.0)
   SubTools.cs      Subtitle and boss header toggles (1.2.0)
+  ReplayTools.cs   Replay editor: camera, free cam, camera paths, clips (1.2.0)
+  ReplayLens.cs    Replay-only lens: zoom, focus, aperture, vignette (1.2.0)
+  LookTools.cs     Green screen and depth map (1.2.0)
+  EditorTools.cs   Park and level editor: blocks, materials, vert ride (1.2.0)
+  FlipPose.cs      Pose layer for flips and spins, feet on the board (1.2.0)
+  TrickTools.cs    Darkslide and hippy jump (1.2.0)
+  TextDump.cs      Writes the game's text tables to files (1.2.0)
   Installer.cs     Windows installer and patch/restore logic
 ```
 

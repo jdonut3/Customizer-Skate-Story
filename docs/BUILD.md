@@ -7,7 +7,7 @@ you need your own copy of Skate Story (Steam, Windows) for the reference DLLs, w
 
 | File | Built from | How |
 |---|---|---|
-| `ShoeMod.dll` | `source/ShoeMod.cs`, `ShoeCore.cs`, `ScreenTools.cs`, `CameraTools.cs`, `MoveTools.cs`, `FxTools.cs` | C# compiler, against the game's own DLLs |
+| `ShoeMod.dll` | `source/ShoeMod.cs`, `ShoeCore.cs`, `ScreenTools.cs`, `CameraTools.cs`, `MoveTools.cs`, `FxTools.cs` (1.2.0 adds the files listed under Branches) | C# compiler, against the game's own DLLs |
 | `ShoeModInstaller.exe` | `source/Installer.cs` | C# compiler, .NET Framework 4 |
 | `patches/*.smp` | `tools/mkpatch.py` | Binary differences between original and edited game asset files (see below) |
 
@@ -40,7 +40,7 @@ The output goes to `build/`.
 
 ## Branches
 
-- `main`: version 1.2.0 (in development). It adds `WarpTools.cs`, `SubTools.cs` and a reference to `Unity.Mathematics.dll`. The build scripts include them.
+- `main`: version 1.2.0 (in development). It adds `WarpTools.cs`, `SubTools.cs`, `ReplayTools.cs`, `ReplayLens.cs`, `LookTools.cs`, `EditorTools.cs`, `FlipPose.cs`, `TrickTools.cs`, `TextDump.cs` and a reference to `Unity.Mathematics.dll`. The build scripts include them.
 - `release-1.1.0`: the exact source of the released 1.1.0. The checksums below are for that branch.
 
 ## Check the result against the release

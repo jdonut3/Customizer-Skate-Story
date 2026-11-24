@@ -159,7 +159,7 @@ public class ScreenTools
     {
         if (trick == null || trickPanel == null) return;
         if (trickMode == 2 && trick.canvas != null) trick.canvas.enabled = false;      // the game sets it again in its next Update
-        bool want = trickMode == 1;
+        bool want = trickMode == 1 || trickMode == 2;
         if (want && !trickMoved)
         {
             tpAnchorMin = trickPanel.anchorMin; tpAnchorMax = trickPanel.anchorMax; tpPos = trickPanel.anchoredPosition;
@@ -175,19 +175,19 @@ public class ScreenTools
             trickMoved = false;
         }
         // above the combo counter when that is in the bottom left too
-        if (trickMoved) trickPanel.anchoredPosition = new Vector2(40f, comboMode == 1 ? 140f : 70f);
+        if (trickMoved) trickPanel.anchoredPosition = trickMode == 2 ? new Vector2(-20000f, -20000f) : new Vector2(40f, comboMode == 1 ? 140f : 70f);
     }
 
     void ApplyCombo()
     {
         if (comboGroup == null) return;
         if (comboMode == 2 && comboCanvas != null) comboCanvas.enabled = false;
-        bool want = comboMode == 1;
+        bool want = comboMode == 1 || comboMode == 2;
         if (want)
         {
             if (!comboMoved) { cgPos = comboGroup.anchoredPosition; comboMoved = true; }
             float w = comboRoot.rect.width;
-            comboGroup.anchoredPosition = new Vector2(-w * 0.5f + 150f, cgPos.y);
+            comboGroup.anchoredPosition = comboMode == 2 ? new Vector2(-20000f, -20000f) : new Vector2(-w * 0.5f + 150f, cgPos.y);
         }
         else if (comboMoved) { comboGroup.anchoredPosition = cgPos; comboMoved = false; }
         if (comboMode != 2 && comboCanvas != null && !comboCanvas.enabled && wasComboHidden) comboCanvas.enabled = true;

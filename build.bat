@@ -15,7 +15,8 @@ if not exist build mkdir build
  /r:"%M%\UnityEngine.InputLegacyModule.dll" /r:"%M%\UnityEngine.UIModule.dll" /r:"%M%\UnityEngine.UI.dll" ^
  /r:"%M%\Unity.Postprocessing.Runtime.dll" /r:"%M%\UnityEngine.PhysicsModule.dll" /r:"%M%\Unity.Addressables.dll" ^
  /r:"%M%\Unity.ResourceManager.dll" /r:"%M%\UnityEngine.ParticleSystemModule.dll" /r:"%M%\Unity.Mathematics.dll" /r:"%M%\Assembly-CSharp.dll" ^
- source\ShoeMod.cs source\ShoeCore.cs source\ScreenTools.cs source\CameraTools.cs source\MoveTools.cs source\FxTools.cs source\WarpTools.cs source\SubTools.cs
+ source\ShoeMod.cs source\ShoeCore.cs source\ScreenTools.cs source\CameraTools.cs source\MoveTools.cs source\FxTools.cs source\WarpTools.cs source\SubTools.cs ^
+ source\ReplayTools.cs source\ReplayLens.cs source\LookTools.cs source\EditorTools.cs source\FlipPose.cs source\TrickTools.cs source\TextDump.cs
 if errorlevel 1 exit /b 1
 "%CSC%" /nologo /target:exe /platform:anycpu /out:build\ShoeModInstaller.exe source\Installer.cs
 if errorlevel 1 exit /b 1

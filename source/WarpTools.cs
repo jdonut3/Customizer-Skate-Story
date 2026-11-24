@@ -15,6 +15,35 @@ using UnityEngine;
 public class WarpTools
 {
     public string status = "";
+    public bool dirty;
+
+    // ---------- favorite levels (saved by the level's asset name) ----------
+    List<string> favs = new List<string>();
+    string search = ""; bool searchFocus;
+    bool favsOpen = true;
+    bool showCut;                                    // also list cutscene and transition scenes
+    public void Load(string line)
+    {
+        line = line.Trim();
+        if (line == "cutscenes=1") showCut = true;
+        if (line.StartsWith("fav=") && line.Length > 4) { string n = line.Substring(4); if (!favs.Contains(n)) favs.Add(n); }
+    }
+    public void Write(System.Text.StringBuilder sb) { if (showCut) sb.Append("cutscenes=1\n"); foreach (string n in favs) sb.Append("fav=").Append(n).Append('\n'); }
+    void ToggleFav(SkateLevel l)
+    {
+        if (favs.Contains(l.name)) favs.Remove(l.name); else favs.Add(l.name);
+        dirty = true;
+    }
+    // one level button with a star in front: click the star to add or remove the favorite
+    void LevelButton(Entry en, float width)
+    {
+        bool fav = favs.Contains(en.level.name);
+        Color old = GUI.color;
+        if (fav) GUI.color = new Color(1f, 0.85f, 0.3f);
+        if (GUILayout.Button(fav ? "\u2605" : "\u2606", GUILayout.Width(28))) ToggleFav(en.level);
+        GUI.color = old;
+        if (GUILayout.Button(en.label, GUILayout.Width(width))) Go(en.level);
+    }
 
     static string Dir { get { return Path.Combine(Path.Combine(Application.persistentDataPath, "ShoeMod"), "freeskate_save_copy"); } }
     static string Marker { get { return Path.Combine(Dir, "free_skate_is_on.txt"); } }
@@ -54,28 +83,57 @@ public class WarpTools
                 if (c == null || c.levels == null) continue;
                 Chapter ch = new Chapter { name = string.IsNullOrEmpty(c.chapterName_english) ? c.name : c.chapterName_english, color = c.color };
                 foreach (SkateStoryChapterAsset.LevelElement e in c.levels)
-                    if (e != null && Usable(e.level) && seen.Add(e.level)) ch.levels.Add(new Entry { level = e.level, label = Name(e.level) });
+                    if (e != null && Usable(e.level, showCut) && seen.Add(e.level)) ch.levels.Add(new Entry { level = e.level, label = Name(e.level) });
                 if (ch.levels.Count > 0) chapters.Add(ch);
             }
         Chapter other = new Chapter { name = "Other levels", color = Color.gray };
         List<SkateLevel> rest = new List<SkateLevel>();
         if (lib.levelList_Runtime != null) rest.AddRange(lib.levelList_Runtime);
         if (lib.levelList_Hubs != null) rest.AddRange(lib.levelList_Hubs);
-        foreach (SkateLevel l in rest) if (Usable(l) && seen.Add(l)) other.levels.Add(new Entry { level = l, label = Name(l) });
+        AddAll(lib.levelList, rest);
+        try
+        {   // the full level table of the game (not public)
+            System.Reflection.FieldInfo fd = typeof(SkateAssetLibrary).GetField("levelDict_Runtime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            System.Collections.IDictionary d = fd != null ? fd.GetValue(fd.IsStatic ? null : lib) as System.Collections.IDictionary : null;
+            if (d != null) AddAll(d.Values, rest);
+        }
+        catch (Exception) { }
+        foreach (SkateLevel l in rest) if (Usable(l, showCut) && seen.Add(l)) other.levels.Add(new Entry { level = l, label = Name(l) });
         other.levels.Sort((a, b) => string.Compare(a.label, b.label, StringComparison.OrdinalIgnoreCase));
         if (other.levels.Count > 0) chapters.Add(other);
     }
-    static bool Usable(SkateLevel l)
+    // the game's full level list: its type is not known here, so read any list of levels in it
+    static void AddAll(object o, List<SkateLevel> to)
+    {
+        if (o == null) return;
+        try
+        {
+            System.Collections.IEnumerable en = o as System.Collections.IEnumerable;
+            if (en != null) { foreach (object x in en) { SkateLevel l = x as SkateLevel; if (l != null) to.Add(l); } return; }
+            foreach (System.Reflection.FieldInfo f in o.GetType().GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
+                if (typeof(System.Collections.IEnumerable).IsAssignableFrom(f.FieldType) && f.FieldType != typeof(string))
+                {
+                    System.Collections.IEnumerable e2 = f.GetValue(o) as System.Collections.IEnumerable;
+                    if (e2 != null) foreach (object x in e2) { SkateLevel l = x as SkateLevel; if (l != null) to.Add(l); }
+                }
+        }
+        catch (Exception) { }
+    }
+    static bool Usable(SkateLevel l, bool cut)
     {
         if (l == null || l.scene == null) return false;
         try { if (!l.scene.RuntimeKeyIsValid()) return false; } catch (Exception) { return false; }
-        return l.type == SkateLevel.Type.Level || l.type == SkateLevel.Type.Tutorial;
+        if (l.type == SkateLevel.Type.Level || l.type == SkateLevel.Type.Tutorial) return true;
+        return cut && (l.type == SkateLevel.Type.Cutscene || l.type == SkateLevel.Type.Transition);
     }
     static string Name(SkateLevel l)
     {
         string n = null;
         try { n = l.GetDisplayName_Localized(); } catch (Exception) { }
-        return string.IsNullOrEmpty(n) || n == l.name ? l.name : n + "   (" + l.name + ")";
+        string s = string.IsNullOrEmpty(n) || n == l.name ? l.name : n + "   (" + l.name + ")";
+        if (l.type == SkateLevel.Type.Cutscene) s += "  [cutscene]";
+        else if (l.type == SkateLevel.Type.Transition) s += "  [transition]";
+        return s;
     }
 
     // ---------- free skate ----------
@@ -199,8 +257,57 @@ public class WarpTools
         if (active && GUILayout.Button("End free skate", GUILayout.Width(140))) End();
         GUILayout.EndHorizontal();
         GUILayout.Label("Some levels start with a scene or a talk. Some scripted events can still happen. End free skate to go back to your game.");
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Write all game text to files", GUILayout.Width(220))) status = TextDump.Run();
+        GUILayout.Label("(the game's text tables, and every text object in this level, to the ShoeMod folder)");
+        GUILayout.EndHorizontal();
         if (chapters.Count == 0) { GUILayout.Label("The level list shows when the game has loaded."); return; }
-        scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(500));
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Search", GUILayout.Width(50));
+        search = MiniText.Layout(ref searchFocus, search, 40, 300);
+        if (search.Length > 0 && GUILayout.Button("Clear", GUILayout.Width(60))) search = "";
+        GUILayout.Space(20);
+        bool sc = GUILayout.Toggle(showCut, " Show cutscenes", GUILayout.Width(150));
+        if (sc != showCut) { showCut = sc; dirty = true; BuildList(); }
+        GUILayout.EndHorizontal();
+        scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(440));
+        if (search.Trim().Length > 0)
+        {   // search: every level whose name has the text (in any chapter), in one list
+            string q = search.Trim().ToLower();
+            List<Entry> hits = new List<Entry>();
+            foreach (Chapter ch in chapters) foreach (Entry en in ch.levels) if (en.label.ToLower().Contains(q) && !hits.Contains(en)) hits.Add(en);
+            GUILayout.Label(hits.Count == 0 ? "No level has \"" + search.Trim() + "\" in its name." : hits.Count + (hits.Count == 1 ? " level found." : " levels found."));
+            int hi = 0;
+            while (hi < hits.Count)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(20);
+                for (int k = 0; k < 3 && hi < hits.Count; k++, hi++) LevelButton(hits[hi], 280);
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.EndScrollView();
+            return;
+        }
+        // favorites first
+        List<Entry> fl = new List<Entry>();
+        foreach (string n in favs)
+            foreach (Chapter ch in chapters) { Entry en = ch.levels.Find(x => x.level.name == n); if (en != null) { fl.Add(en); break; } }
+        Color o2 = GUI.color; GUI.color = new Color(1f, 0.9f, 0.5f);
+        if (GUILayout.Button((favsOpen ? "v  " : ">  ") + "\u2605 Favorites   (" + fl.Count + ")", GUILayout.Width(400))) favsOpen = !favsOpen;
+        GUI.color = o2;
+        if (favsOpen)
+        {
+            if (fl.Count == 0) { GUILayout.BeginHorizontal(); GUILayout.Space(20); GUILayout.Label("No favorites yet. Click the star in front of a level to add it here."); GUILayout.EndHorizontal(); }
+            int fi = 0;
+            while (fi < fl.Count)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(20);
+                for (int k = 0; k < 3 && fi < fl.Count; k++, fi++) LevelButton(fl[fi], 280);
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.Space(6);
+        }
         foreach (Chapter ch in chapters)
         {
             Color old = GUI.color; GUI.color = Color.Lerp(Color.white, ch.color, 0.5f);
@@ -213,7 +320,7 @@ public class WarpTools
                 GUILayout.BeginHorizontal();
                 GUILayout.Space(20);
                 for (int k = 0; k < 3 && i < ch.levels.Count; k++, i++)
-                    if (GUILayout.Button(ch.levels[i].label, GUILayout.Width(310))) Go(ch.levels[i].level);
+                    LevelButton(ch.levels[i], 280);
                 GUILayout.EndHorizontal();
             }
         }

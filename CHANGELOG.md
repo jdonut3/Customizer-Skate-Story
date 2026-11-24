@@ -9,6 +9,12 @@
 - Movement tab: "Normal health in the fragile mode" keeps the end-game look (the fragile flag is not changed).
 - Effects tab: board effects are copies that the game does not stop; body particles per body type; body look and layers; a finder for objects near the board.
 - Performance: slow searches run only after a level load.
+- Replay: limbs, board and body follow the recording (no trails). Free cam with speed sliders and slow mode, go to the skater, camera paths with a path view (V) and draggable points, and a replay-only lens (zoom, focus, aperture, vignette) that can be animated along the path.
+- Screen tab and replay: green screen (the skater and board stay in front, also in glass reflections) and a depth map. The "hidden" setting for trick name, combo and XP now works.
+- Levels tab: favorite levels, search, and a "Show cutscenes" toggle that also lists cutscene and transition scenes. A button writes all game text to files.
+- Movement tab: game speed fix (both speeds multiply, the value is written every frame). Flips reworked with a tuck pose and the board held at the feet. Extra spins turn per frame with a tuck and grab pose and no leg twist.
+- Tricks: darkslide (in a grind) and hippy jump (the game's ollie, the board stays on the ground).
+- Editor: park editor on a grid with nine block kinds and materials from the game. Pipes have a vert ride that keeps the skater on the ramp. The editor also works in any game level, and the blocks are saved per level.
 - The version text in `ShoeMod.cs` now says 1.2.0.
 
 ## 1.1.0

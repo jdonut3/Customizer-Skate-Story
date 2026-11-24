@@ -215,6 +215,7 @@ public class CameraTools
     void OnPreCull(Camera c)
     {   // runs just before the camera draws, after all the game's camera code
         if (c == null || c != cam || applied) return;
+        if (ReplayTools.Active || EditorTools.Editing) return;     // the replay or the level editor sets the camera
         // rig shots and fixed spots do not turn with the skater, so only the game camera needs the hold
         if (mode == 0 && (FlipWeight() > 0f || flipCam))
         {

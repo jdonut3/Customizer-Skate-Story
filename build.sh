@@ -10,6 +10,7 @@ mcs -nologo -nostdlib -noconfig -target:library -optimize -out:build/ShoeMod.dll
   $(for d in mscorlib System System.Core UnityEngine.CoreModule UnityEngine.IMGUIModule UnityEngine.TextRenderingModule \
     UnityEngine.InputLegacyModule UnityEngine.UIModule UnityEngine.UI Unity.Postprocessing.Runtime UnityEngine.PhysicsModule \
     Unity.Addressables Unity.ResourceManager UnityEngine.ParticleSystemModule Unity.Mathematics Assembly-CSharp; do echo "-r:$M/$d.dll"; done) \
-  source/ShoeMod.cs source/ShoeCore.cs source/ScreenTools.cs source/CameraTools.cs source/MoveTools.cs source/FxTools.cs source/WarpTools.cs source/SubTools.cs
+  source/ShoeMod.cs source/ShoeCore.cs source/ScreenTools.cs source/CameraTools.cs source/MoveTools.cs source/FxTools.cs source/WarpTools.cs source/SubTools.cs \
+  source/ReplayTools.cs source/ReplayLens.cs source/LookTools.cs source/EditorTools.cs source/FlipPose.cs source/TrickTools.cs source/TextDump.cs
 mcs -nologo -target:exe -platform:anycpu -out:build/ShoeModInstaller.exe source/Installer.cs
 echo "Done: build/ShoeMod.dll and build/ShoeModInstaller.exe"
