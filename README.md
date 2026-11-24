@@ -4,7 +4,7 @@
 
 ShoeMod is a fan-made in-game editor for the Windows/Steam version of *Skate Story*. Press **F6** in-game to open or close the editor.
 
-> This repository contains C# source and project documentation only. It intentionally does not include the compiled installer, compiled mod DLL, game files, or binary patch files. Get the playable release from the project's Nexus Mods page.
+> This repository contains the full mod: the C# source, the patch files, and a ready-to-install development build in [`dist/ShoeMod-1.2.0-dev.zip`](dist/ShoeMod-1.2.0-dev.zip) (the compiled installer, the mod DLL and the patch files). It contains no game files: the patch files hold only the changes, and the installer makes the changed files from your own copy of the game. The stable release (1.1.0) is on the project's Nexus Mods page.
 
 ## Features
 
@@ -31,6 +31,15 @@ No separate mod loader is required by the release instructions.
 The stable release (1.1.0) is on Nexus Mods.
 
 The newest development build (1.2.0) is in this repository: download [`dist/ShoeMod-1.2.0-dev.zip`](dist/ShoeMod-1.2.0-dev.zip), extract the full ZIP file, start `ShoeModInstaller.exe` and type 1. The instructions are in `README.txt` in the ZIP file. Some new features in this build are not fully tested.
+
+SHA-256 of the files in the ZIP:
+
+```text
+9c30c511ab9e93dc59a59747142e620b98d9c5c24f82a10c1aea9c3093f07736  ShoeMod.dll
+89aec89130b8a5b4a7f33633c89f251aaa94bc4d63fe232a736e0008665f2cf6  ShoeModInstaller.exe
+```
+
+Windows can show a "Windows protected your PC" message, because the installer has no paid signature. Click "More info", then "Run anyway". The installer source is `source/Installer.cs`.
 
 ## Source layout
 
