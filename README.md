@@ -4,7 +4,7 @@
 
 ShoeMod is a fan-made in-game editor for the Windows/Steam version of *Skate Story*. Press **F6** in-game to open or close the editor.
 
-> This repository contains the full mod: the C# source, the patch files, and a ready-to-install development build in [`dist/ShoeMod-1.2.0-dev.zip`](dist/ShoeMod-1.2.0-dev.zip) (the compiled installer, the mod DLL and the patch files). It contains no game files: the patch files hold only the changes, and the installer makes the changed files from your own copy of the game. The stable release (1.1.0) is on the project's Nexus Mods page.
+> This repository contains the full mod: the C# source, the patch files, and a ready-to-install development build in [`dist/ShoeMod-1.2.0-dev.zip`](dist/ShoeMod-1.2.0-dev.zip) (the compiled installer, the mod DLL and the patch files). It contains no game files: the patch files hold only the changes, and the installer makes the changed files from your own copy of the game. The stable release (1.1.0) is on the project's [Nexus Mods page](https://www.nexusmods.com/skatestory/mods/3).
 
 ## Features
 
@@ -17,7 +17,7 @@ ShoeMod is a fan-made in-game editor for the Windows/Steam version of *Skate Sto
 - **Levels (1.2.0):** free skate in any level, with story objectives and level exits turned off. The real save is copied first and put back afterwards.
 - **Screen (1.2.0):** toggles for subtitles and boss headers (boss health bars and fight timers).
 
-The editor's detailed controls and known limitations are described in the release README distributed with the Nexus Mods download.
+The editor's detailed controls and known limitations are described in the release README distributed with the [Nexus Mods download](https://www.nexusmods.com/skatestory/mods/3).
 
 ## Requirements
 
@@ -28,7 +28,7 @@ No separate mod loader is required by the release instructions.
 
 ## Installation
 
-The stable release (1.1.0) is on Nexus Mods.
+The stable release (1.1.0) is on [Nexus Mods](https://www.nexusmods.com/skatestory/mods/3).
 
 The newest development build (1.2.0) is in this repository: download [`dist/ShoeMod-1.2.0-dev.zip`](dist/ShoeMod-1.2.0-dev.zip), extract the full ZIP file, start `ShoeModInstaller.exe` and type 1. The instructions are in `README.txt` in the ZIP file. Some new features in this build are not fully tested.
 
@@ -86,5 +86,5 @@ No license granting reuse, redistribution, or modification rights is currently p
 
 ## Links
 
-- Nexus Mods release: **add your mod page URL here**
+- Nexus Mods release: https://www.nexusmods.com/skatestory/mods/3
 - Issues: use the GitHub Issues tab for reproducible bugs and feature requests
